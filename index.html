@@ -3,62 +3,116 @@
 <head>
   <meta charset="UTF-8" />
   <title>AI Playground</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont;
-      max-width: 800px;
-      margin: 40px auto;
-    }
-    textarea {
-      width: 100%;
-      height: 200px;
-    }
-    button {
-      margin-top: 12px;
-      padding: 8px 16px;
-    }
-    .output {
-      margin-top: 24px;
-      padding: 12px;
-      border: 1px solid #ddd;
-      white-space: pre-wrap;
-    }
-  </style>
+
+  <!-- External stylesheet -->
+  <link rel="stylesheet" href="/style.css" />
 </head>
+
 <body>
   <h1>AI Playground</h1>
+  <small>v0.2 – Copilot-style summarizer</small>
 
-  <p>Paste text below and summarize it.</p>
+  <div class="controls">
+    <label class="inline">
+      <input type="checkbox" id="auto" />
+      Auto-summarize on paste
+    </label>
+  </div>
 
-  <textarea id="input"></textarea>
-  <br />
-  <button onclick="summarize()">Summarize</button>
+  <div class="buttons">
+    <button onclick="runPreset('short')">Short</button>
+    <button onclick="runPreset('medium')">Medium</button>
+    <button onclick="runPreset('detailed')">Detailed</button>
+    <button onclick="clearAll()" class="secondary">Clear</button>
+  </div>
+
+  <textarea id="input" placeholder="Paste text here..."></textarea>
+
+  <div class="meta">
+    <label>
+      Max output chars:
+      <input id="cap" type="number" value="900" min="200" max="5000" />
+    </label>
+    <span id="status"></span>
+  </div>
 
   <div class="output" id="output"></div>
 
-<script>
-  async function summarize() {
-    const text = document.getElementById("input").value;
-    const output = document.getElementById("output");
+  <script>
+    const inputEl = document.getElementById("input");
+    const outputEl = document.getElementById("output");
+    const statusEl = document.getElementById("status");
+    const capEl = document.getElementById("cap");
+    const autoEl = document.getElementById("auto");
 
-    output.innerText = "Summarizing...";
+    let pasteTimer = null;
 
-    try {
-      const resp = await fetch("/api/summarize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text })
-      });
+    inputEl.addEventListener("paste", () => {
+      if (!autoEl.checked) return;
+      clearTimeout(pasteTimer);
+      pasteTimer = setTimeout(() => runPreset("short"), 250);
+    });
 
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data?.error || "Request failed");
-
-      output.innerText = data.summary || "(empty response)";
-    } catch (err) {
-      output.innerText = `Error: ${err.message || err}`;
+    function clearAll() {
+      inputEl.value = "";
+      outputEl.innerText = "";
+      statusEl.innerText = "";
     }
-  }
-</script>
 
+    function presetInstruction(mode, cap) {
+      if (mode === "short") {
+        return `Summarize in 5 bullets. Each bullet under 12 words. Total output under ${cap} characters.`;
+      }
+      if (mode === "medium") {
+        return `Summarize in 8 bullets with 1 short takeaway line at the end. Total output under ${cap} characters.`;
+      }
+      return `Provide: (1) 10-bullet summary, (2) key definitions, (3) 3 suggested next actions. Total output under ${cap} characters.`;
+    }
+
+    async function runPreset(mode) {
+      const text = inputEl.value || "";
+      const cap = Math.max(200, Math.min(5000, Number(capEl.value || 900)));
+
+      if (!text.trim()) {
+        outputEl.innerText = "Paste some text first.";
+        return;
+      }
+
+      const instruction = presetInstruction(mode, cap);
+      const payload = `INSTRUCTION:\n${instruction}\n\nCONTENT:\n${text}`;
+
+      statusEl.innerText = "Summarizing...";
+      outputEl.innerText = "";
+
+      const start = performance.now();
+
+      try {
+        const resp = await fetch("/api/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: payload })
+        });
+
+        const data = await resp.json();
+        const ms = Math.round(performance.now() - start);
+
+        if (!resp.ok) {
+          throw new Error(data?.error || `Request failed (${resp.status})`);
+        }
+
+        let out = (data.summary || "").trim();
+        if (out.length > cap) {
+          out = out.slice(0, cap - 1) + "…";
+        }
+
+        outputEl.innerText = out;
+        statusEl.innerText = `Done (${ms} ms) • Mode: ${mode}`;
+      } catch (err) {
+        const ms = Math.round(performance.now() - start);
+        statusEl.innerText = `Error (${ms} ms)`;
+        outputEl.innerText = `Error: ${err.message || err}`;
+      }
+    }
+  </script>
 </body>
 </html>
