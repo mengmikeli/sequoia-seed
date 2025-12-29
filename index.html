@@ -3,9 +3,45 @@
 <head>
   <meta charset="UTF-8" />
   <title>AI Playground</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont;
+      max-width: 800px;
+      margin: 40px auto;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+    }
+    button {
+      margin-top: 12px;
+      padding: 8px 16px;
+    }
+    .output {
+      margin-top: 24px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      white-space: pre-wrap;
+    }
+  </style>
 </head>
 <body>
-  <h1>Hello 👋</h1>
-  <p>This is my first Azure-hosted page.</p>
+  <h1>AI Playground</h1>
+
+  <p>Paste text below and summarize it.</p>
+
+  <textarea id="input"></textarea>
+  <br />
+  <button onclick="summarize()">Summarize</button>
+
+  <div class="output" id="output"></div>
+
+  <script>
+    function summarize() {
+      const text = document.getElementById("input").value;
+      document.getElementById("output").innerText =
+        "Next step: send this text to GPT-4.1-mini";
+    }
+  </script>
 </body>
 </html>
