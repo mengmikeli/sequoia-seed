@@ -36,12 +36,29 @@
 
   <div class="output" id="output"></div>
 
-  <script>
-    function summarize() {
-      const text = document.getElementById("input").value;
-      document.getElementById("output").innerText =
-        "Next step: send this text to GPT-4.1-mini";
+<script>
+  async function summarize() {
+    const text = document.getElementById("input").value;
+    const output = document.getElementById("output");
+
+    output.innerText = "Summarizing...";
+
+    try {
+      const resp = await fetch("/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data?.error || "Request failed");
+
+      output.innerText = data.summary || "(empty response)";
+    } catch (err) {
+      output.innerText = `Error: ${err.message || err}`;
     }
-  </script>
+  }
+</script>
+
 </body>
 </html>
