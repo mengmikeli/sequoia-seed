@@ -8,7 +8,7 @@
   --muted: #666;
   --accent: #0366d6;
   --radius: 6px;
-  --inspector-width: 360px; /* adjustable */
+  --inspector-width: 480px; /* adjustable */
 }
 
 *,
@@ -270,6 +270,7 @@ button.secondary {
 }
 
 .inspector-content {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   font-size: 13px;
   max-height: calc(100vh - 420px);
   overflow: auto;
@@ -286,6 +287,7 @@ button.secondary {
 }
 
 .inspector-content pre {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   background: #f6f8fa;
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 4px;

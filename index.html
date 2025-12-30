@@ -10,7 +10,7 @@
 
 <body>
   <h1>AI Playground</h1>
-  <small>v0.2 – Copilot-style summarizer</small>
+  <small>v0.3 – Copilot-style summarizer</small>
 
   <div class="controls">
     <label class="inline">
@@ -252,6 +252,11 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
 
         panel.setAttribute('aria-hidden', 'false');
         panel.style.display = 'block';
+
+        // Automatically open the most recent run if available
+        if (runs.length > 0 && !currentRunId) {
+          openRunInspector(runs[0].id);
+        }
 
         // Move keyboard focus into the panel for keyboard users
         if (closeBtn && typeof closeBtn.focus === 'function') {
