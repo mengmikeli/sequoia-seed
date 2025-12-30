@@ -8,6 +8,7 @@
   --muted: #666;
   --accent: #0366d6;
   --radius: 6px;
+  --inspector-width: 360px; /* adjustable */
 }
 
 *,
@@ -95,6 +96,21 @@ button:focus {
   outline-offset: 2px;
 }
 
+button.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: rgba(0,0,0,0.06);
+  box-shadow: 0 8px 20px rgba(3,102,214,0.12);
+}
+button.primary:hover {
+  box-shadow: 0 10px 24px rgba(3,102,214,0.16);
+  transform: translateY(0);
+}
+button.primary:focus {
+  outline: 3px solid rgba(3,102,214,0.18);
+  outline-offset: 2px;
+}
+
 /* Preset toggle button styles (only for buttons with data-mode) */
 .buttons button[data-mode] {
   /* preserve button feel */
@@ -144,4 +160,72 @@ button.secondary {
   background: var(--bg);
   font-family: 'JetBrains Mono', monospace;
   border-radius: var(--radius);
+}
+
+/* Debug UI - top-right toggle and right panel (overlay mode) */
+.debug-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  z-index: 10001;
+}
+.debug-toggle[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(3,102,214,0.12);
+}
+.debug-panel {
+  display: none;
+  position: fixed;
+  right: 0px;
+  top: 64px;
+  width: var(--inspector-width);
+  max-height: calc(100vh - 160px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: #fbfdff;
+  padding: 12px;
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  font-family: 'JetBrains Mono', monospace;
+  z-index: 9999;
+}
+.debug-panel .debug-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  margin-bottom:8px;
+}
+.debug-panel .debug-body {
+  display:flex;
+  gap:12px;
+  flex-direction:column;
+}
+.run-list {
+  border-top: 1px solid rgba(0,0,0,0.04);
+  padding-top: 8px;
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+}
+.run-entry {
+  padding: 8px;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+  cursor: pointer;
+  font-size:13px;
+}
+.run-entry:hover { background: rgba(0,0,0,0.02); }
+.run-snippet { color: var(--muted); font-size:12px; margin-top:4px; white-space:pre-wrap; }
+.run-meta { font-size:12px; color:var(--muted); }
+
+/* On small screens, make the inspector a bottom sheet to avoid layout issues */
+@media (max-width: 900px) {
+  .debug-panel { width: 100%; right: 0; left: 0; top: auto; bottom: 0; max-height: 40vh; border-radius: 8px 8px 0 0; }
+  .debug-toggle { right: 12px; }
 }

@@ -17,6 +17,8 @@
       <input type="checkbox" id="auto" checked />
       Auto-summarize on paste
     </label>
+
+    <button id="debug-toggle" class="debug-toggle" aria-pressed="false" aria-controls="debug-panel" title="Toggle Token Inspector">Token Inspector</button>
   </div>
  
   <div class="buttons">
@@ -24,6 +26,7 @@
     <button data-mode="medium" aria-pressed="true" onclick="selectPreset('medium')">Medium</button>
     <button data-mode="detailed" aria-pressed="false" onclick="selectPreset('detailed')">Detailed</button>
     <button onclick="clearAll()" class="secondary">Clear</button>
+    <button id="submit-btn" class="primary" onclick="submitPreset()" aria-label="Summarize current selection">Summarize</button>
   </div>
 
   <textarea id="input" placeholder="Paste text here..."></textarea>
@@ -36,6 +39,26 @@
     <span id="status"></span>
   </div>
 
+  <section id="debug-panel" class="debug-panel" aria-expanded="false" aria-hidden="true" aria-label="Token Inspector Panel" style="display:none;">
+    <div class="debug-header">
+      <strong>Token Inspector</strong>
+      <button id="debug-close" class="debug-close" aria-label="Close debug panel">Close</button>
+    </div>
+    <div class="debug-body">
+      <div id="run-list" class="run-list" aria-live="polite"></div>
+      <div id="run-inspector" class="run-inspector" hidden>
+        <div class="inspector-tabs" role="tablist">
+          <button role="tab" aria-selected="true" data-tab="prompt">Prompt</button>
+          <button role="tab" aria-selected="false" data-tab="context">Context</button>
+          <button role="tab" aria-selected="false" data-tab="request">Request</button>
+          <button role="tab" aria-selected="false" data-tab="response">Response</button>
+          <button role="tab" aria-selected="false" data-tab="logs">Logs</button>
+        </div>
+        <div id="inspector-content" class="inspector-content"></div>
+      </div>
+    </div>
+  </section>
+
   <div class="output" id="output"></div>
 
   <script>
@@ -46,14 +69,47 @@
     const autoEl = document.getElementById("auto");
     const presetButtons = document.querySelectorAll('.buttons button[data-mode]');
  
+    // Debug mode: persisted toggle & panel shell
+    const DEBUG_KEY = 'ai_playground_debug';
+    let debugEnabled = localStorage.getItem(DEBUG_KEY) === 'true';
+    const debugToggleEl = () => document.getElementById('debug-toggle');
+    const debugPanelEl = () => document.getElementById('debug-panel');
+    const debugCloseEl = () => document.getElementById('debug-close');
+
+    const runs = [];
+
+    function applyDebugUIState() {
+      const btn = debugToggleEl();
+      const panel = debugPanelEl();
+      if (!btn || !panel) return;
+      btn.setAttribute('aria-pressed', debugEnabled ? 'true' : 'false');
+      panel.setAttribute('aria-expanded', debugEnabled ? 'true' : 'false');
+      panel.setAttribute('aria-hidden', debugEnabled ? 'false' : 'true');
+      panel.style.display = debugEnabled ? 'block' : 'none';
+      if (debugEnabled) document.body.classList.add('debug-open');
+      else document.body.classList.remove('debug-open');
+    }
+
+    function toggleDebug() {
+      debugEnabled = !debugEnabled;
+      localStorage.setItem(DEBUG_KEY, debugEnabled ? 'true' : 'false');
+      applyDebugUIState();
+    }
+
+    if (debugToggleEl()) debugToggleEl().addEventListener('click', toggleDebug);
+    if (debugCloseEl()) debugCloseEl().addEventListener('click', () => { debugEnabled = false; localStorage.setItem(DEBUG_KEY, 'false'); applyDebugUIState(); });
+
+    applyDebugUIState();
+
     let pasteTimer = null;
  
     inputEl.addEventListener("paste", () => {
       if (!autoEl.checked) return;
       clearTimeout(pasteTimer);
       pasteTimer = setTimeout(() => {
-        const active = document.querySelector('.buttons button[data-mode][aria-pressed="true"]');
-        selectPreset(active?.dataset.mode || 'medium');
+        let active = document.querySelector('.buttons button[data-mode][aria-pressed="true"]');
+        if (!active) { selectPreset('medium'); active = document.querySelector('.buttons button[data-mode][aria-pressed="true"]'); }
+        runPreset(active?.dataset.mode || 'medium');
       }, 250);
     });
  
@@ -126,9 +182,17 @@
     }
 
     function selectPreset(mode) {
-      // update pressed state
+      // update pressed state only (do not auto-run)
       presetButtons.forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false'));
-      // run the preset
+    }
+
+    function submitPreset() {
+      let active = document.querySelector('.buttons button[data-mode][aria-pressed="true"]');
+      if (!active) {
+        selectPreset('medium');
+        active = document.querySelector('.buttons button[data-mode][aria-pressed="true"]');
+      }
+      const mode = active?.dataset.mode || 'medium';
       runPreset(mode);
     }
   </script>
