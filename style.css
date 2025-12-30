@@ -223,6 +223,7 @@ button.secondary {
 .run-entry:hover { background: rgba(0,0,0,0.02); }
 .run-snippet { color: var(--muted); font-size:12px; margin-top:4px; white-space:pre-wrap; }
 .run-meta { font-size:12px; color:var(--muted); }
+.run-empty { color: var(--muted); padding: 10px; font-size: 13px; text-align: center; }
 
 /* On small screens, make the inspector a bottom sheet to avoid layout issues */
 @media (max-width: 900px) {

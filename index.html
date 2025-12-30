@@ -76,18 +76,128 @@
     const debugPanelEl = () => document.getElementById('debug-panel');
     const debugCloseEl = () => document.getElementById('debug-close');
 
+    // DOM helpers for inspector
+    const runListEl = () => document.getElementById('run-list');
+    const runInspectorEl = () => document.getElementById('run-inspector');
+    const inspectorContentEl = () => document.getElementById('inspector-content');
+
     const runs = [];
+
+    // Create a lightweight run record and render
+    function createRunRecord(mode, payload) {
+      const id = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
+      const run = {
+        id,
+        timestamp: new Date().toISOString(),
+        ui: { mode, cap: Number(capEl.value || 900), auto: autoEl.checked, debug: debugEnabled },
+        prompt: { instruction: presetInstruction(mode, Number(capEl.value || 900)), content: payload.slice(0,2000), composed: payload },
+        request: { url: '/api/summarize', bodySize: payload.length, headers: { 'Content-Type': 'application/json' } },
+        response: null,
+        status: 'pending',
+        durationMs: null,
+        logs: ['Compose prompt']
+      };
+      runs.unshift(run);
+      if (runs.length > 50) runs.pop();
+      renderDebugPanel();
+      return id;
+    }
+
+    function finalizeRunRecord(id, details = {}) {
+      const run = runs.find(r => r.id === id);
+      if (!run) return;
+      run.status = details.status || (details.error ? 'error' : 'ok');
+      run.response = { snippet: details.response && details.response.summary ? details.response.summary : (details.response || null), raw: details.raw || null };
+      run.durationMs = details.durationMs || null;
+      if (details.error) run.logs.push('Error: ' + details.error);
+      else run.logs.push('Response received');
+      renderDebugPanel();
+    }
+
+    function escapeHtml(s) { return String(s || '').replace(/[&<>\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c])); }
+
+    function openRunInspector(runId) {
+      const r = runs.find(x => x.id === runId);
+      const inspector = runInspectorEl();
+      const content = inspectorContentEl();
+      if (!r || !inspector || !content) return;
+      inspector.hidden = false;
+      const payloadPreview = (r.prompt.composed || '').slice(0,1000);
+      content.innerHTML = `
+        <h4>Prompt (instruction)</h4>
+        <pre>${escapeHtml(r.prompt.instruction)}</pre>
+        <h4>Content (preview)</h4>
+        <pre>${escapeHtml(payloadPreview)}${r.prompt.composed.length > 1000 ? '…' : ''}</pre>
+        <h4>Request</h4>
+        <pre>Endpoint: ${escapeHtml(r.request.url)}\nBody size: ${r.request.bodySize} chars</pre>
+        <h4>Response</h4>
+        <pre>${escapeHtml(r.response && r.response.snippet ? r.response.snippet : '')}</pre>
+        <h4>Logs</h4>
+        <pre>${escapeHtml(r.logs.join('\n'))}</pre>
+      `;
+    }
+
+    function renderDebugPanel() {
+      const panel = debugPanelEl();
+      if (!panel) return;
+      const list = runListEl();
+      if (list) {
+        if (runs.length === 0) {
+          list.innerHTML = '<div class="run-empty">No runs yet.</div>';
+        } else {
+          list.innerHTML = runs.map(r => `
+            <div class="run-entry" data-run-id="${r.id}" role="button" tabindex="0">
+              <div class="run-meta"><strong>${r.ui.mode}</strong> • ${new Date(r.timestamp).toLocaleTimeString ? new Date(r.timestamp).toLocaleTimeString() : r.timestamp} • ${r.status}</div>
+              <div class="run-snippet">${escapeHtml(r.prompt.content.slice(0,200))}${r.prompt.content.length>200 ? '…' : ''}</div>
+            </div>
+          `).join('');
+          list.querySelectorAll('.run-entry').forEach(el => {
+            el.addEventListener('click', () => openRunInspector(el.dataset.runId));
+            el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') openRunInspector(el.dataset.runId); });
+          });
+        }
+      }
+    }
 
     function applyDebugUIState() {
       const btn = debugToggleEl();
       const panel = debugPanelEl();
+      const closeBtn = debugCloseEl();
       if (!btn || !panel) return;
       btn.setAttribute('aria-pressed', debugEnabled ? 'true' : 'false');
       panel.setAttribute('aria-expanded', debugEnabled ? 'true' : 'false');
-      panel.setAttribute('aria-hidden', debugEnabled ? 'false' : 'true');
-      panel.style.display = debugEnabled ? 'block' : 'none';
-      if (debugEnabled) document.body.classList.add('debug-open');
-      else document.body.classList.remove('debug-open');
+
+      // Opening: ensure panel is discoverable and focus moves into it
+      if (debugEnabled) {
+        // Remove inert (if present) so assistive tech can reach it
+        panel.removeAttribute('inert');
+        try { panel.inert = false; } catch (e) {}
+
+        panel.setAttribute('aria-hidden', 'false');
+        panel.style.display = 'block';
+
+        // Move keyboard focus into the panel for keyboard users
+        if (closeBtn && typeof closeBtn.focus === 'function') {
+          closeBtn.focus();
+        }
+
+        document.body.classList.add('debug-open');
+        return;
+      }
+
+      // Closing: if focus is inside the panel, move it to the toggle so it isn't hidden from AT
+      if (panel.contains(document.activeElement) && typeof btn.focus === 'function') {
+        btn.focus();
+      }
+
+      panel.setAttribute('aria-hidden', 'true');
+      panel.style.display = 'none';
+
+      // Mark inert to prevent the panel from being reachable by assistive tech or focus
+      panel.setAttribute('inert', '');
+      try { panel.inert = true; } catch (e) {}
+
+      document.body.classList.remove('debug-open');
     }
 
     function toggleDebug() {
@@ -148,6 +258,9 @@
       const instruction = presetInstruction(mode, cap);
       const payload = `INSTRUCTION:\n${instruction}\n\nCONTENT:\n${text}`;
 
+      // create a run record for the inspector
+      const runId = (typeof createRunRecord === 'function') ? createRunRecord(mode, payload) : null;
+
       statusEl.innerText = "Summarizing...";
       outputEl.innerText = "";
 
@@ -164,18 +277,23 @@
         const ms = Math.round(performance.now() - start);
 
         if (!resp.ok) {
+          if (runId) finalizeRunRecord(runId, { status: 'error', httpStatus: resp.status, error: data?.error || `Request failed (${resp.status})`, durationMs: ms });
           throw new Error(data?.error || `Request failed (${resp.status})`);
         }
 
         let out = (data.summary || "").trim();
         if (out.length > cap) {
           out = out.slice(0, cap - 1) + "…";
+          if (runId) finalizeRunRecord(runId, { status: 'ok', httpStatus: resp.status, response: data, raw: data, truncated: true, durationMs: ms });
+        } else {
+          if (runId) finalizeRunRecord(runId, { status: 'ok', httpStatus: resp.status, response: data, raw: data, durationMs: ms });
         }
 
         outputEl.innerText = out;
         statusEl.innerText = `Done (${ms} ms) • Mode: ${mode}`;
       } catch (err) {
         const ms = Math.round(performance.now() - start);
+        if (runId) finalizeRunRecord(runId, { status: 'error', error: err.message || String(err), durationMs: ms });
         statusEl.innerText = `Error (${ms} ms)`;
         outputEl.innerText = `Error: ${err.message || err}`;
       }
