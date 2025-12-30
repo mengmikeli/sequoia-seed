@@ -90,7 +90,13 @@
         id,
         timestamp: new Date().toISOString(),
         ui: { mode, cap: Number(capEl.value || 900), auto: autoEl.checked, debug: debugEnabled },
-        prompt: { instruction: presetInstruction(mode, Number(capEl.value || 900)), content: payload.slice(0,2000), composed: payload },
+        prompt: {
+          system: null, // Will be populated from backend response
+          instruction: presetInstruction(mode, Number(capEl.value || 900)),
+          content: payload.slice(0,2000),
+          composed: payload,
+          actualUserPrompt: null // Will be populated from backend response
+        },
         request: { url: '/api/summarize', bodySize: payload.length, headers: { 'Content-Type': 'application/json' } },
         response: null,
         status: 'pending',
@@ -109,6 +115,17 @@
       run.status = details.status || (details.error ? 'error' : 'ok');
       run.response = { snippet: details.response && details.response.summary ? details.response.summary : (details.response || null), raw: details.raw || null };
       run.durationMs = details.durationMs || null;
+
+      // Update prompts with actual values from backend if available
+      if (details.response) {
+        if (details.response.systemPrompt) {
+          run.prompt.system = details.response.systemPrompt;
+        }
+        if (details.response.userPrompt) {
+          run.prompt.actualUserPrompt = details.response.userPrompt;
+        }
+      }
+
       if (details.error) run.logs.push('Error: ' + details.error);
       else run.logs.push('Response received');
       renderDebugPanel();
@@ -116,25 +133,85 @@
 
     function escapeHtml(s) { return String(s || '').replace(/[&<>\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c])); }
 
+    let currentRunId = null;
+
+    function switchInspectorTab(tabName) {
+      const tabButtons = document.querySelectorAll('.inspector-tabs button[role="tab"]');
+      const tabPanels = document.querySelectorAll('.inspector-content .tab-panel');
+
+      tabButtons.forEach(btn => {
+        const isActive = btn.dataset.tab === tabName;
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+
+      tabPanels.forEach(panel => {
+        const isActive = panel.dataset.tab === tabName;
+        panel.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+      });
+    }
+
     function openRunInspector(runId) {
       const r = runs.find(x => x.id === runId);
       const inspector = runInspectorEl();
       const content = inspectorContentEl();
       if (!r || !inspector || !content) return;
+
+      currentRunId = runId;
       inspector.hidden = false;
+
       const payloadPreview = (r.prompt.composed || '').slice(0,1000);
+      const fullPayload = escapeHtml(r.prompt.composed || '');
+
+      // Build tab panels
       content.innerHTML = `
-        <h4>Prompt (instruction)</h4>
-        <pre>${escapeHtml(r.prompt.instruction)}</pre>
-        <h4>Content (preview)</h4>
-        <pre>${escapeHtml(payloadPreview)}${r.prompt.composed.length > 1000 ? '…' : ''}</pre>
-        <h4>Request</h4>
-        <pre>Endpoint: ${escapeHtml(r.request.url)}\nBody size: ${r.request.bodySize} chars</pre>
-        <h4>Response</h4>
-        <pre>${escapeHtml(r.response && r.response.snippet ? r.response.snippet : '')}</pre>
-        <h4>Logs</h4>
-        <pre>${escapeHtml(r.logs.join('\n'))}</pre>
+        <div class="tab-panel" data-tab="prompt" aria-hidden="false">
+          <h4>System Prompt (from backend)</h4>
+          <pre>${escapeHtml(r.prompt.system || 'Pending...')}</pre>
+          <h4>Frontend Instruction (generated)</h4>
+          <pre>${escapeHtml(r.prompt.instruction)}</pre>
+          <h4>Actual User Prompt (sent to AI)</h4>
+          <pre>${escapeHtml(r.prompt.actualUserPrompt || 'Pending...')}</pre>
+        </div>
+        <div class="tab-panel" data-tab="context" aria-hidden="true">
+          <h4>Full Content Sent</h4>
+          <pre>${fullPayload}</pre>
+        </div>
+        <div class="tab-panel" data-tab="request" aria-hidden="true">
+          <h4>Request Details</h4>
+          <pre>Endpoint: ${escapeHtml(r.request.url)}
+Body size: ${r.request.bodySize} chars
+Headers: ${escapeHtml(JSON.stringify(r.request.headers, null, 2))}
+
+UI State:
+  Mode: ${escapeHtml(r.ui.mode)}
+  Cap: ${r.ui.cap}
+  Auto: ${r.ui.auto}
+  Debug: ${r.ui.debug}</pre>
+        </div>
+        <div class="tab-panel" data-tab="response" aria-hidden="true">
+          <h4>Response Summary</h4>
+          <pre>${escapeHtml(r.response && r.response.snippet ? r.response.snippet : 'No response yet')}</pre>
+          ${r.response && r.response.raw ? `<h4>Raw Response</h4><pre>${escapeHtml(JSON.stringify(r.response.raw, null, 2))}</pre>` : ''}
+        </div>
+        <div class="tab-panel" data-tab="logs" aria-hidden="true">
+          <h4>Execution Log</h4>
+          <pre>Timestamp: ${r.timestamp}
+Status: ${r.status}
+Duration: ${r.durationMs ? r.durationMs + ' ms' : 'N/A'}
+
+Log entries:
+${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
+        </div>
       `;
+
+      // Attach tab click handlers
+      const tabButtons = inspector.querySelectorAll('.inspector-tabs button[role="tab"]');
+      tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => switchInspectorTab(btn.dataset.tab));
+      });
+
+      // Set initial tab to prompt
+      switchInspectorTab('prompt');
     }
 
     function renderDebugPanel() {

@@ -6,14 +6,15 @@ async function callAzureOpenAI({ endpoint, apiKey, deployment, apiVersion, input
     `/openai/deployments/${encodeURIComponent(deployment)}` +
     `/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
 
+  const systemPrompt = "You are a browser-embedded AI assistant. Summarize accurately and concisely. Prefer bullet points. If info is missing, say so.";
+
   const body = {
     messages: [
       {
         role: "system",
-        content:
-          "You are a browser-embedded AI assistant. Summarize accurately and concisely. Prefer bullet points. If info is missing, say so."
+        content: systemPrompt
       },
-      { role: "user", content: `Summarize the following text in 5 bullets:\n\n${inputText}` }
+      { role: "user", content: inputText }
     ],
     temperature: 0.3,
     max_tokens: 500
@@ -40,7 +41,11 @@ async function callAzureOpenAI({ endpoint, apiKey, deployment, apiVersion, input
   }
 
   const text = data?.choices?.[0]?.message?.content ?? "";
-  return text.trim();
+  return {
+    summary: text.trim(),
+    systemPrompt: systemPrompt,
+    userPrompt: inputText
+  };
 }
 
 module.exports = async function (context, req) {
@@ -72,7 +77,7 @@ module.exports = async function (context, req) {
       return;
     }
 
-    const summary = await callAzureOpenAI({
+    const result = await callAzureOpenAI({
       endpoint,
       apiKey,
       deployment,
@@ -83,7 +88,7 @@ module.exports = async function (context, req) {
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { summary }
+      body: result
     };
   } catch (e) {
     context.log("summarize error:", e?.message || e);

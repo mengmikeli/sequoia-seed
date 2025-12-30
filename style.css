@@ -225,8 +225,89 @@ button.secondary {
 .run-meta { font-size:12px; color:var(--muted); }
 .run-empty { color: var(--muted); padding: 10px; font-size: 13px; text-align: center; }
 
+/* Inspector tabs and content */
+.run-inspector {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.inspector-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.inspector-tabs button {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--radius) var(--radius) 0 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.inspector-tabs button:hover {
+  background: rgba(3, 102, 214, 0.08);
+  color: #111;
+  transform: none;
+  box-shadow: none;
+}
+
+.inspector-tabs button[aria-selected="true"] {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 500;
+}
+
+.inspector-tabs button:focus {
+  outline: 2px solid rgba(3, 102, 214, 0.3);
+  outline-offset: 1px;
+}
+
+.inspector-content {
+  font-size: 13px;
+  max-height: calc(100vh - 420px);
+  overflow: auto;
+}
+
+.inspector-content h4 {
+  margin: 12px 0 6px 0;
+  font-size: 13px;
+  color: #111;
+}
+
+.inspector-content h4:first-child {
+  margin-top: 0;
+}
+
+.inspector-content pre {
+  background: #f6f8fa;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.inspector-content .tab-panel {
+  display: none;
+}
+
+.inspector-content .tab-panel[aria-hidden="false"] {
+  display: block;
+}
+
 /* On small screens, make the inspector a bottom sheet to avoid layout issues */
 @media (max-width: 900px) {
   .debug-panel { width: 100%; right: 0; left: 0; top: auto; bottom: 0; max-height: 40vh; border-radius: 8px 8px 0 0; }
   .debug-toggle { right: 12px; }
+  .inspector-content { max-height: calc(40vh - 200px); }
 }
