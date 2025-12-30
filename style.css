@@ -1,7 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap');
+
+:root {
+  --max-width: 800px;
+  --space: 16px;
+  --bg: #fafafa;
+  --border: #ddd;
+  --muted: #666;
+  --accent: #0366d6;
+  --radius: 6px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont;
-  max-width: 800px;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  line-height: 1.5;
+  max-width: var(--max-width);
   margin: 40px auto;
+  padding: 0 var(--space);
+  color: #111;
+  background: #fff;
 }
 
 .controls {
@@ -12,6 +34,7 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .buttons {
@@ -19,6 +42,7 @@ body {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 textarea {
@@ -26,11 +50,65 @@ textarea {
   height: 220px;
   margin-top: 12px;
   font-size: 14px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  resize: vertical;
+}
+
+/* Ensure buttons and inputs use the monospace font and render consistently */
+button,
+input,
+select,
+textarea {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* keep button appearance consistent across browsers */
+button,
+input[type="button"],
+input[type="submit"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
 
 button {
   padding: 6px 12px;
   cursor: pointer;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: var(--radius);
+  transition: box-shadow .12s, transform .08s;
+}
+button:hover {
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+button:focus {
+  outline: 3px solid rgba(3,102,214,0.15);
+  outline-offset: 2px;
+}
+
+/* Preset toggle button styles (only for buttons with data-mode) */
+.buttons button[data-mode] {
+  /* preserve button feel */
+}
+
+.buttons button[data-mode][aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: rgba(0,0,0,0.06);
+  box-shadow: 0 8px 20px rgba(3,102,214,0.18);
+  transform: translateY(0); /* don't lift when active */
+}
+.buttons button[data-mode][aria-pressed="true"]:hover {
+  box-shadow: 0 10px 24px rgba(3,102,214,0.22);
 }
 
 button.secondary {
@@ -43,20 +121,27 @@ button.secondary {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 #cap {
   width: 100px;
+  max-width: 30%;
+  min-width: 80px;
 }
 
 #status {
-  opacity: 0.8;
+  opacity: 0.9;
+  color: var(--muted);
 }
 
 .output {
   padding: 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border);
   white-space: pre-wrap;
   margin-top: 12px;
-  background: #fafafa;
+  background: var(--bg);
+  font-family: 'JetBrains Mono', monospace;
+  border-radius: var(--radius);
 }

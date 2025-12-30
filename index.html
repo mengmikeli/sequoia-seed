@@ -14,15 +14,15 @@
 
   <div class="controls">
     <label class="inline">
-      <input type="checkbox" id="auto" />
+      <input type="checkbox" id="auto" checked />
       Auto-summarize on paste
     </label>
   </div>
-
+ 
   <div class="buttons">
-    <button onclick="runPreset('short')">Short</button>
-    <button onclick="runPreset('medium')">Medium</button>
-    <button onclick="runPreset('detailed')">Detailed</button>
+    <button data-mode="short" aria-pressed="false" onclick="selectPreset('short')">Short</button>
+    <button data-mode="medium" aria-pressed="true" onclick="selectPreset('medium')">Medium</button>
+    <button data-mode="detailed" aria-pressed="false" onclick="selectPreset('detailed')">Detailed</button>
     <button onclick="clearAll()" class="secondary">Clear</button>
   </div>
 
@@ -44,19 +44,30 @@
     const statusEl = document.getElementById("status");
     const capEl = document.getElementById("cap");
     const autoEl = document.getElementById("auto");
-
+    const presetButtons = document.querySelectorAll('.buttons button[data-mode]');
+ 
     let pasteTimer = null;
-
+ 
     inputEl.addEventListener("paste", () => {
       if (!autoEl.checked) return;
       clearTimeout(pasteTimer);
-      pasteTimer = setTimeout(() => runPreset("short"), 250);
+      pasteTimer = setTimeout(() => {
+        const active = document.querySelector('.buttons button[data-mode][aria-pressed="true"]');
+        selectPreset(active?.dataset.mode || 'medium');
+      }, 250);
     });
-
+ 
+    // ensure a default preset is set (fallback to medium)
+    if (!document.querySelector('.buttons button[data-mode][aria-pressed="true"]')) {
+      const fallback = document.querySelector('.buttons button[data-mode="medium"]');
+      fallback && fallback.setAttribute('aria-pressed', 'true');
+    }
+ 
     function clearAll() {
       inputEl.value = "";
       outputEl.innerText = "";
       statusEl.innerText = "";
+      presetButtons.forEach(b => b.setAttribute('aria-pressed', 'false'));
     }
 
     function presetInstruction(mode, cap) {
@@ -112,6 +123,13 @@
         statusEl.innerText = `Error (${ms} ms)`;
         outputEl.innerText = `Error: ${err.message || err}`;
       }
+    }
+
+    function selectPreset(mode) {
+      // update pressed state
+      presetButtons.forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false'));
+      // run the preset
+      runPreset(mode);
     }
   </script>
 </body>
