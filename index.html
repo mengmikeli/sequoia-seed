@@ -238,9 +238,19 @@
       const fullPayload = escapeHtml(r.prompt.composed || '');
 
       // Format messages array for display if available (conversation mode)
-      const contextContent = r.prompt.messages
-        ? escapeHtml(JSON.stringify(r.prompt.messages, null, 2))
-        : fullPayload;
+      let contextContent;
+      if (r.prompt.messages) {
+        // Format each message nicely instead of raw JSON
+        contextContent = r.prompt.messages.map((msg, idx) => {
+          const roleLabel = msg.role.toUpperCase();
+          const contentPreview = msg.content.length > 500
+            ? msg.content.slice(0, 500) + '...'
+            : msg.content;
+          return `[Message ${idx + 1}] ${roleLabel}:\n${escapeHtml(contentPreview)}`;
+        }).join('\n\n' + '─'.repeat(60) + '\n\n');
+      } else {
+        contextContent = fullPayload;
+      }
 
       // Build tab panels
       content.innerHTML = `
@@ -462,9 +472,11 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
       // Add previous conversation turns (up to last 3 for context window management)
       const recentRuns = successfulRuns.slice(0, 3).reverse();
       recentRuns.forEach(run => {
-        if (run.prompt.actualUserPrompt) {
-          messages.push({ role: "user", content: run.prompt.actualUserPrompt });
-        }
+        // Use actualUserPrompt if available (from backend), otherwise reconstruct from instruction and content
+        const userPrompt = run.prompt.actualUserPrompt ||
+                          `INSTRUCTION:\n${run.prompt.instruction}\n\nCONTENT:\n${run.prompt.content}`;
+        messages.push({ role: "user", content: userPrompt });
+
         if (run.response.snippet) {
           messages.push({ role: "assistant", content: run.response.snippet });
         }

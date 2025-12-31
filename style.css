@@ -61,7 +61,7 @@ textarea {
 
 #instruction {
   height: 6em;
-  min-height: 3em;
+  min-height: 4em;
   background: var(--bg);
   color: var(--muted);
   cursor: default;
