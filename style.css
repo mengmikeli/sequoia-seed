@@ -59,6 +59,20 @@ textarea {
   resize: vertical;
 }
 
+#instruction {
+  height: 80px;
+  background: var(--bg);
+  color: #333;
+  cursor: default;
+}
+
+#instruction:not([readonly]) {
+  background: #fff;
+  cursor: text;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(3, 102, 214, 0.1);
+}
+
 /* Ensure buttons and inputs use the monospace font and render consistently */
 button,
 input,

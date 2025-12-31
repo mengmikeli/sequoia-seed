@@ -25,10 +25,12 @@
     <button data-mode="short" aria-pressed="false" onclick="selectPreset('short')">Short</button>
     <button data-mode="medium" aria-pressed="true" onclick="selectPreset('medium')">Medium</button>
     <button data-mode="detailed" aria-pressed="false" onclick="selectPreset('detailed')">Detailed</button>
+    <button data-mode="custom" aria-pressed="false" onclick="selectPreset('custom')">Custom</button>
     <button onclick="clearAll()" class="secondary">Clear</button>
     <button id="submit-btn" class="primary" onclick="handleSmartSubmit()" aria-label="Summarize current selection">Summarize</button>
   </div>
 
+  <textarea id="instruction" placeholder="Instruction for the AI..." readonly></textarea>
   <textarea id="input" placeholder="Paste text here..."></textarea>
 
   <div class="meta">
@@ -63,6 +65,7 @@
 
   <script>
     const inputEl = document.getElementById("input");
+    const instructionEl = document.getElementById("instruction");
     const outputEl = document.getElementById("output");
     const statusEl = document.getElementById("status");
     const capEl = document.getElementById("cap");
@@ -153,7 +156,7 @@
     }
 
     // Create a lightweight run record and render
-    function createRunRecord(mode, payload) {
+    function createRunRecord(mode, payload, messages = null) {
       const id = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
       const run = {
         id,
@@ -164,7 +167,8 @@
           instruction: presetInstruction(mode, Number(capEl.value || 900)),
           content: payload.slice(0,2000),
           composed: payload,
-          actualUserPrompt: null // Will be populated from backend response
+          actualUserPrompt: null, // Will be populated from backend response
+          messages: messages // Store full messages array for conversation mode
         },
         request: { url: '/api/summarize', bodySize: payload.length, headers: { 'Content-Type': 'application/json' } },
         response: null,
@@ -233,6 +237,11 @@
       const payloadPreview = (r.prompt.composed || '').slice(0,1000);
       const fullPayload = escapeHtml(r.prompt.composed || '');
 
+      // Format messages array for display if available (conversation mode)
+      const contextContent = r.prompt.messages
+        ? escapeHtml(JSON.stringify(r.prompt.messages, null, 2))
+        : fullPayload;
+
       // Build tab panels
       content.innerHTML = `
         <div class="tab-panel" data-tab="prompt" aria-hidden="false">
@@ -244,8 +253,8 @@
           <pre>${escapeHtml(r.prompt.actualUserPrompt || 'Pending...')}</pre>
         </div>
         <div class="tab-panel" data-tab="context" aria-hidden="true">
-          <h4>Full Content Sent</h4>
-          <pre>${fullPayload}</pre>
+          <h4>${r.prompt.messages ? 'Conversation Messages (sent to API)' : 'Full Content Sent'}</h4>
+          <pre>${contextContent}</pre>
         </div>
         <div class="tab-panel" data-tab="request" aria-hidden="true">
           <h4>Request Details</h4>
@@ -370,6 +379,18 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
     // Initialize smart button state
     updateSmartButton();
 
+    // Initialize instruction field with default preset
+    const defaultMode = document.querySelector('.buttons button[data-mode][aria-pressed="true"]')?.dataset.mode || 'medium';
+    instructionEl.value = presetInstruction(defaultMode, Number(capEl.value || 900));
+
+    // Update instruction when cap changes (only for preset modes, not custom)
+    capEl.addEventListener('input', () => {
+      const activeMode = document.querySelector('.buttons button[data-mode][aria-pressed="true"]')?.dataset.mode;
+      if (activeMode && activeMode !== 'custom') {
+        instructionEl.value = presetInstruction(activeMode, Number(capEl.value || 900));
+      }
+    });
+
     let pasteTimer = null;
  
     inputEl.addEventListener("paste", () => {
@@ -403,6 +424,12 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
       outputEl.innerText = "";
       statusEl.innerText = "";
       presetButtons.forEach(b => b.setAttribute('aria-pressed', 'false'));
+
+      // Clear conversation context (runs)
+      runs = [];
+      renderDebugPanel();
+      saveSession();
+
       updateSmartButton();
     }
 
@@ -472,7 +499,7 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
 
       // Create run record (use special payload for conversation)
       const payload = `[Conversation mode - ${messages.length} messages]\n${text}`;
-      const runId = createRunRecord(mode, payload);
+      const runId = createRunRecord(mode, payload, messages);
 
       statusEl.innerText = "Continuing conversation...";
       outputEl.innerText = "";
@@ -515,6 +542,10 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
     }
 
     function presetInstruction(mode, cap) {
+      if (mode === "custom") {
+        // For custom mode, return the instruction field value
+        return instructionEl.value || "Summarize the content.";
+      }
       if (mode === "short") {
         return `Summarize in 5 bullets. Each bullet under 12 words. Total output under ${cap} characters.`;
       }
@@ -582,6 +613,30 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
     function selectPreset(mode) {
       // update pressed state only (do not auto-run)
       presetButtons.forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false'));
+
+      // Update instruction field based on mode
+      const cap = Number(capEl.value || 900);
+      if (mode === 'custom') {
+        // Make instruction field editable
+        instructionEl.removeAttribute('readonly');
+        instructionEl.focus();
+        // If instruction is empty or contains a preset, populate with medium preset as starting point
+        if (!instructionEl.value || isPresetInstruction(instructionEl.value)) {
+          instructionEl.value = presetInstruction('medium', cap);
+        }
+      } else {
+        // Make instruction field read-only and update with preset
+        instructionEl.setAttribute('readonly', 'readonly');
+        instructionEl.value = presetInstruction(mode, cap);
+      }
+    }
+
+    function isPresetInstruction(text) {
+      // Check if instruction matches any preset pattern
+      const cap = Number(capEl.value || 900);
+      return text === presetInstruction('short', cap) ||
+             text === presetInstruction('medium', cap) ||
+             text === presetInstruction('detailed', cap);
     }
 
     function submitPreset() {
