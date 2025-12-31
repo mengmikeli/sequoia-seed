@@ -25,6 +25,7 @@
     <button data-mode="short" aria-pressed="false" onclick="selectPreset('short')">Short</button>
     <button data-mode="medium" aria-pressed="true" onclick="selectPreset('medium')">Medium</button>
     <button data-mode="detailed" aria-pressed="false" onclick="selectPreset('detailed')">Detailed</button>
+    <button data-mode="followup" aria-pressed="false" onclick="selectPreset('followup')">Follow-up</button>
     <button data-mode="custom" aria-pressed="false" onclick="selectPreset('custom')">Custom</button>
     <button onclick="clearAll()" class="secondary">Clear</button>
     <button id="submit-btn" class="primary" onclick="handleSmartSubmit()" aria-label="Summarize current selection">Summarize</button>
@@ -451,6 +452,9 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
           submitBtn.textContent = "Continue";
           submitBtn.setAttribute('aria-label', 'Continue conversation with context');
           submitBtn.setAttribute('title', 'Continue with previous summary as context');
+
+          // Auto-select Follow-up button when conversation context exists
+          selectPreset('followup');
         } else {
           submitBtn.textContent = "Summarize";
           submitBtn.setAttribute('aria-label', 'Summarize current selection');
@@ -563,6 +567,9 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
       }
       if (mode === "medium") {
         return `Summarize in 8 bullets with 1 short takeaway line at the end. Total output under ${cap} characters.`;
+      }
+      if (mode === "followup") {
+        return `Refer to the context and answer question directly. Also follow with one critical question.`;
       }
       return `Provide: (1) 10-bullet summary, (2) key definitions, (3) 3 suggested next actions. Total output under ${cap} characters.`;
     }
