@@ -10,7 +10,7 @@
 
 <body>
   <h1>AI Playground</h1>
-  <small>v0.3 – Copilot-style summarizer</small>
+  <small>v0.4 – Conversational summarizer</small>
 
   <div class="controls">
     <label class="inline">
@@ -26,7 +26,7 @@
     <button data-mode="medium" aria-pressed="true" onclick="selectPreset('medium')">Medium</button>
     <button data-mode="detailed" aria-pressed="false" onclick="selectPreset('detailed')">Detailed</button>
     <button onclick="clearAll()" class="secondary">Clear</button>
-    <button id="submit-btn" class="primary" onclick="submitPreset()" aria-label="Summarize current selection">Summarize</button>
+    <button id="submit-btn" class="primary" onclick="handleSmartSubmit()" aria-label="Summarize current selection">Summarize</button>
   </div>
 
   <textarea id="input" placeholder="Paste text here..."></textarea>
@@ -68,6 +68,7 @@
     const capEl = document.getElementById("cap");
     const autoEl = document.getElementById("auto");
     const presetButtons = document.querySelectorAll('.buttons button[data-mode]');
+    const submitBtn = document.getElementById("submit-btn");
  
     // Debug mode: persisted toggle & panel shell
     const DEBUG_KEY = 'ai_playground_debug';
@@ -81,7 +82,75 @@
     const runInspectorEl = () => document.getElementById('run-inspector');
     const inspectorContentEl = () => document.getElementById('inspector-content');
 
-    const runs = [];
+    let runs = [];
+
+    // Storage abstraction layer - easily swappable for backend persistence later
+    const SessionStorage = {
+      SESSIONS_KEY: 'ai_playground_session',
+
+      async save(sessionData) {
+        // v0.4: localStorage implementation
+        try {
+          localStorage.setItem(this.SESSIONS_KEY, JSON.stringify(sessionData));
+        } catch (e) {
+          console.warn('Failed to save session:', e);
+        }
+
+        // v0.5+: backend implementation (just uncomment and add auth)
+        // if (navigator.onLine && userToken) {
+        //   await fetch('/api/sessions', {
+        //     method: 'POST',
+        //     headers: { 'Authorization': `Bearer ${userToken}` },
+        //     body: JSON.stringify(sessionData)
+        //   });
+        // }
+      },
+
+      async load() {
+        // v0.4: localStorage implementation
+        try {
+          const data = localStorage.getItem(this.SESSIONS_KEY);
+          return data ? JSON.parse(data) : null;
+        } catch (e) {
+          console.warn('Failed to load session:', e);
+          return null;
+        }
+
+        // v0.5+: backend implementation
+        // if (navigator.onLine && userToken) {
+        //   const res = await fetch('/api/sessions/current', {
+        //     headers: { 'Authorization': `Bearer ${userToken}` }
+        //   });
+        //   return res.ok ? await res.json() : null;
+        // }
+      },
+
+      async clear() {
+        try {
+          localStorage.removeItem(this.SESSIONS_KEY);
+        } catch (e) {
+          console.warn('Failed to clear session:', e);
+        }
+      }
+    };
+
+    // Session management
+    async function saveSession() {
+      const sessionData = {
+        runs: runs,
+        lastModified: new Date().toISOString()
+      };
+      await SessionStorage.save(sessionData);
+    }
+
+    async function loadSession() {
+      const sessionData = await SessionStorage.load();
+      if (sessionData && sessionData.runs) {
+        runs = sessionData.runs;
+        renderDebugPanel();
+        updateSmartButton();
+      }
+    }
 
     // Create a lightweight run record and render
     function createRunRecord(mode, payload) {
@@ -106,6 +175,7 @@
       runs.unshift(run);
       if (runs.length > 50) runs.pop();
       renderDebugPanel();
+      saveSession(); // Auto-save on new run
       return id;
     }
 
@@ -129,6 +199,7 @@
       if (details.error) run.logs.push('Error: ' + details.error);
       else run.logs.push('Response received');
       renderDebugPanel();
+      saveSession(); // Auto-save when run completes
     }
 
     function escapeHtml(s) { return String(s || '').replace(/[&<>\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c])); }
@@ -181,7 +252,7 @@
           <pre>Endpoint: ${escapeHtml(r.request.url)}
 Body size: ${r.request.bodySize} chars
 Headers: ${escapeHtml(JSON.stringify(r.request.headers, null, 2))}
-
+${r.response && r.response.raw && r.response.raw.conversationLength ? `Conversation length: ${r.response.raw.conversationLength} messages\n` : ''}
 UI State:
   Mode: ${escapeHtml(r.ui.mode)}
   Cap: ${r.ui.cap}
@@ -293,6 +364,12 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
 
     applyDebugUIState();
 
+    // Load session on page load
+    loadSession();
+
+    // Initialize smart button state
+    updateSmartButton();
+
     let pasteTimer = null;
  
     inputEl.addEventListener("paste", () => {
@@ -310,12 +387,131 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
       const fallback = document.querySelector('.buttons button[data-mode="medium"]');
       fallback && fallback.setAttribute('aria-pressed', 'true');
     }
- 
+
+    function handleSmartSubmit() {
+      // Route to appropriate handler based on conversation state
+      const hasSuccessfulRun = runs.some(r => r.status === 'ok' && r.response && r.response.snippet);
+      if (hasSuccessfulRun) {
+        continueConversation();
+      } else {
+        submitPreset();
+      }
+    }
+
     function clearAll() {
       inputEl.value = "";
       outputEl.innerText = "";
       statusEl.innerText = "";
       presetButtons.forEach(b => b.setAttribute('aria-pressed', 'false'));
+      updateSmartButton();
+    }
+
+    function updateSmartButton() {
+      // Adapt button text and behavior based on conversation state
+      const hasSuccessfulRun = runs.some(r => r.status === 'ok' && r.response && r.response.snippet);
+      if (submitBtn) {
+        if (hasSuccessfulRun) {
+          submitBtn.textContent = "Continue";
+          submitBtn.setAttribute('aria-label', 'Continue conversation with context');
+          submitBtn.setAttribute('title', 'Continue with previous summary as context');
+        } else {
+          submitBtn.textContent = "Summarize";
+          submitBtn.setAttribute('aria-label', 'Summarize current selection');
+          submitBtn.setAttribute('title', '');
+        }
+      }
+    }
+
+    function buildConversationMessages(mode, text, cap) {
+      const systemPrompt = "You are a browser-embedded AI assistant. Summarize accurately and concisely. Prefer bullet points. If info is missing, say so.";
+      const instruction = presetInstruction(mode, cap);
+      const userMessage = `INSTRUCTION:\n${instruction}\n\nCONTENT:\n${text}`;
+
+      // Get successful runs for conversation context
+      const successfulRuns = runs.filter(r => r.status === 'ok' && r.response && r.response.snippet);
+
+      const messages = [{ role: "system", content: systemPrompt }];
+
+      // Add previous conversation turns (up to last 3 for context window management)
+      const recentRuns = successfulRuns.slice(0, 3).reverse();
+      recentRuns.forEach(run => {
+        if (run.prompt.actualUserPrompt) {
+          messages.push({ role: "user", content: run.prompt.actualUserPrompt });
+        }
+        if (run.response.snippet) {
+          messages.push({ role: "assistant", content: run.response.snippet });
+        }
+      });
+
+      // Add current user message
+      messages.push({ role: "user", content: userMessage });
+
+      return messages;
+    }
+
+    async function continueConversation() {
+      const text = inputEl.value || "";
+      const cap = Math.max(200, Math.min(5000, Number(capEl.value || 900)));
+
+      if (!text.trim()) {
+        outputEl.innerText = "Paste some text first.";
+        return;
+      }
+
+      const lastRun = runs.find(r => r.status === 'ok' && r.response && r.response.snippet);
+      if (!lastRun) {
+        outputEl.innerText = "No previous summary to continue from.";
+        return;
+      }
+
+      // Use "medium" mode for continue, or current selected mode
+      let active = document.querySelector('.buttons button[data-mode][aria-pressed="true"]');
+      const mode = active?.dataset.mode || 'medium';
+
+      const messages = buildConversationMessages(mode, text, cap);
+
+      // Create run record (use special payload for conversation)
+      const payload = `[Conversation mode - ${messages.length} messages]\n${text}`;
+      const runId = createRunRecord(mode, payload);
+
+      statusEl.innerText = "Continuing conversation...";
+      outputEl.innerText = "";
+
+      const start = performance.now();
+
+      try {
+        const resp = await fetch("/api/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: messages })
+        });
+
+        const data = await resp.json();
+        const ms = Math.round(performance.now() - start);
+
+        if (!resp.ok) {
+          if (runId) finalizeRunRecord(runId, { status: 'error', httpStatus: resp.status, error: data?.error || `Request failed (${resp.status})`, durationMs: ms });
+          throw new Error(data?.error || `Request failed (${resp.status})`);
+        }
+
+        let out = (data.summary || "").trim();
+        if (out.length > cap) {
+          out = out.slice(0, cap - 1) + "…";
+          if (runId) finalizeRunRecord(runId, { status: 'ok', httpStatus: resp.status, response: data, raw: data, truncated: true, durationMs: ms });
+        } else {
+          if (runId) finalizeRunRecord(runId, { status: 'ok', httpStatus: resp.status, response: data, raw: data, durationMs: ms });
+        }
+
+        outputEl.innerText = out;
+        statusEl.innerText = `Done (${ms} ms) • Mode: ${mode} • Conversation`;
+        updateSmartButton();
+      } catch (err) {
+        const ms = Math.round(performance.now() - start);
+        if (runId) finalizeRunRecord(runId, { status: 'error', error: err.message || String(err), durationMs: ms });
+        statusEl.innerText = `Error (${ms} ms)`;
+        outputEl.innerText = `Error: ${err.message || err}`;
+        updateSmartButton();
+      }
     }
 
     function presetInstruction(mode, cap) {
@@ -373,11 +569,13 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
 
         outputEl.innerText = out;
         statusEl.innerText = `Done (${ms} ms) • Mode: ${mode}`;
+        updateSmartButton();
       } catch (err) {
         const ms = Math.round(performance.now() - start);
         if (runId) finalizeRunRecord(runId, { status: 'error', error: err.message || String(err), durationMs: ms });
         statusEl.innerText = `Error (${ms} ms)`;
         outputEl.innerText = `Error: ${err.message || err}`;
+        updateSmartButton();
       }
     }
 

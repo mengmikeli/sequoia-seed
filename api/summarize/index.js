@@ -1,21 +1,13 @@
 // Azure Functions (Static Web Apps API) - Node.js
 
-async function callAzureOpenAI({ endpoint, apiKey, deployment, apiVersion, inputText }) {
+async function callAzureOpenAI({ endpoint, apiKey, deployment, apiVersion, messages }) {
   const url =
     `${endpoint.replace(/\/+$/, "")}` +
     `/openai/deployments/${encodeURIComponent(deployment)}` +
     `/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
 
-  const systemPrompt = "You are a browser-embedded AI assistant. Summarize accurately and concisely. Prefer bullet points. If info is missing, say so.";
-
   const body = {
-    messages: [
-      {
-        role: "system",
-        content: systemPrompt
-      },
-      { role: "user", content: inputText }
-    ],
+    messages: messages,
     temperature: 0.3,
     max_tokens: 500
   };
@@ -41,25 +33,21 @@ async function callAzureOpenAI({ endpoint, apiKey, deployment, apiVersion, input
   }
 
   const text = data?.choices?.[0]?.message?.content ?? "";
+
+  // Extract system prompt and user prompt from messages for response metadata
+  const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
+  const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content || '';
+
   return {
     summary: text.trim(),
     systemPrompt: systemPrompt,
-    userPrompt: inputText
+    userPrompt: lastUserMessage,
+    conversationLength: messages.length
   };
 }
 
 module.exports = async function (context, req) {
   try {
-    const inputText = (req.body && req.body.text) ? String(req.body.text) : "";
-    if (!inputText.trim()) {
-      context.res = {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-        body: { error: "Missing 'text' in request body." }
-      };
-      return;
-    }
-
     const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
     const apiKey = process.env.AZURE_OPENAI_API_KEY;
     const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
@@ -77,12 +65,37 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // Support both conversation mode (messages array) and legacy mode (text string)
+    let messages;
+
+    if (req.body && req.body.messages && Array.isArray(req.body.messages)) {
+      // New conversation mode: accept messages array directly
+      messages = req.body.messages;
+    } else {
+      // Legacy mode: convert single text input to messages array
+      const inputText = (req.body && req.body.text) ? String(req.body.text) : "";
+      if (!inputText.trim()) {
+        context.res = {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+          body: { error: "Missing 'text' or 'messages' in request body." }
+        };
+        return;
+      }
+
+      const systemPrompt = "You are a browser-embedded AI assistant. Summarize accurately and concisely. Prefer bullet points. If info is missing, say so.";
+      messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: inputText }
+      ];
+    }
+
     const result = await callAzureOpenAI({
       endpoint,
       apiKey,
       deployment,
       apiVersion,
-      inputText
+      messages
     });
 
     context.res = {
