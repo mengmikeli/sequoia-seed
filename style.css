@@ -60,14 +60,17 @@ textarea {
 }
 
 #instruction {
-  height: 80px;
+  height: 6em;
+  min-height: 3em;
   background: var(--bg);
-  color: #333;
+  color: var(--muted);
   cursor: default;
+  resize: vertical;
 }
 
 #instruction:not([readonly]) {
   background: #fff;
+  color: #111;
   cursor: text;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(3, 102, 214, 0.1);

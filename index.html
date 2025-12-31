@@ -617,13 +617,9 @@ ${escapeHtml(r.logs.map((log, i) => `${i + 1}. ${log}`).join('\n'))}</pre>
       // Update instruction field based on mode
       const cap = Number(capEl.value || 900);
       if (mode === 'custom') {
-        // Make instruction field editable
+        // Make instruction field editable - keep whatever text is already there
         instructionEl.removeAttribute('readonly');
         instructionEl.focus();
-        // If instruction is empty or contains a preset, populate with medium preset as starting point
-        if (!instructionEl.value || isPresetInstruction(instructionEl.value)) {
-          instructionEl.value = presetInstruction('medium', cap);
-        }
       } else {
         // Make instruction field read-only and update with preset
         instructionEl.setAttribute('readonly', 'readonly');
